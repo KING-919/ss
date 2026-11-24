@@ -563,6 +563,14 @@ async function startServer() {
     res.send(fs.readFileSync(fullPath));
   });
 
+  // Mark active Express backend for browser clients (prevents static-fallback mode)
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+      res.cookie('alardah_server', '1', { path: '/', httpOnly: false });
+    }
+    next();
+  });
+
   // 1. Site Settings (Admin Customization CMS + Persistent Theme)
   app.get('/api/settings', (_req, res) => {
     const rows = queryAll(`SELECT value FROM site_settings WHERE key = 'config'`);

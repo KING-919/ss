@@ -2,21 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Clock, Users } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { calculatePlanProgress } from '../utils/studyLogic';
-
-interface StudyPlan {
-  id: number;
-  title: string;
-  category: string;
-  duration: string;
-  level: string;
-  description: string;
-  tasks_json: string;
-  enrolled_count: number;
-}
+import {
+  fsGetStudyPlans,
+  fsCompleteStudyPlan,
+  type StudyPlanRecord,
+} from '../services/firestoreService';
 
 export function StudyPlansPage() {
-  const { settings, token, refreshNotifications } = useApp();
-  const [plans, setPlans] = useState<StudyPlan[]>([]);
+  const { settings, user, refreshCurrentUser, refreshNotifications } = useApp();
+  const [plans, setPlans] = useState<StudyPlanRecord[]>([]);
   const [category, setCategory] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string>('');
@@ -29,19 +23,15 @@ export function StudyPlansPage() {
     setLoading(true);
     setErrorMsg('');
     try {
-      const url = cat
-        ? `/api/study-plans?category=${encodeURIComponent(cat)}`
-        : '/api/study-plans';
-      const res = await fetch(url);
-      const data = await res.json();
-      if (!res.ok) {
-        setErrorMsg(`${data.error || 'خطأ'} — Query: ${data.debugQuery || ''}`);
+      const data = await fsGetStudyPlans(cat);
+      if (data.error) {
+        setErrorMsg(`${data.error} — Query: ${data.debugQuery}`);
         setPlans([]);
       } else {
-        setPlans(data.plans || []);
+        setPlans(data.plans);
       }
     } catch {
-      setErrorMsg('تعذر تحميل خطط المذاكرة');
+      setErrorMsg('تعذر تحميل خطط المذاكرة من قاعدة البيانات');
     } finally {
       setLoading(false);
     }
@@ -61,19 +51,10 @@ export function StudyPlansPage() {
   };
 
   const handleCompletePlan = async (planId: number) => {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers.Authorization = `Bearer ${token}`;
-    const res = await fetch(`/api/study-plans/${planId}/complete`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ points: 100 }),
-    });
-    if (res.ok) {
-      setToast('تم تسجيل إتمام الخطة وإضافة 100 نقطة إلى رصيدك');
-      fetchPlans(category);
-      refreshNotifications();
-      setTimeout(() => setToast(''), 4000);
-    }
+    await fsCompleteStudyPlan(planId, user?.id, 100);
+    setToast('تم تسجيل إتمام الخطة وإضافة 100 نقطة إلى رصيدك');
+    await Promise.all([fetchPlans(category), refreshCurrentUser(), refreshNotifications()]);
+    setTimeout(() => setToast(''), 4000);
   };
 
   return (
@@ -132,12 +113,7 @@ export function StudyPlansPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {plans.map((plan) => {
-            let tasks: string[] = [];
-            try {
-              tasks = JSON.parse(plan.tasks_json);
-            } catch {
-              tasks = [];
-            }
+            const tasks = Array.isArray(plan.tasks) ? plan.tasks : [];
             const done = completedMap[plan.id] || [];
             const progress = calculatePlanProgress(done.length, tasks.length);
 

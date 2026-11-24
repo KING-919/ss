@@ -1,25 +1,40 @@
 import React, { useEffect, useState } from 'react';
 import { Bell, Check, Trash2 } from 'lucide-react';
 import { useApp, type NotificationItem } from '../context/AppContext';
+import {
+  fsGetNotifications,
+  fsMarkNotificationRead,
+  fsDeleteNotification,
+} from '../services/firestoreService';
+
+function getSearchParam(key: string): string | null {
+  if (typeof window === 'undefined') return null;
+  const searchParams = new URLSearchParams(window.location.search);
+  const direct = searchParams.get(key);
+  if (direct !== null) return direct;
+  const hashQuery = window.location.hash.split('?')[1];
+  if (hashQuery) {
+    return new URLSearchParams(hashQuery).get(key);
+  }
+  return null;
+}
 
 export function NotificationsPage() {
   const { user, settings, refreshNotifications } = useApp();
-  const [targetUserId, setTargetUserId] = useState<string>(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('userId') || String(user?.id || 2);
-  });
+  const [targetUserId, setTargetUserId] = useState<string>(
+    () => getSearchParam('userId') || String(user?.id || 2),
+  );
   const [items, setItems] = useState<NotificationItem[]>([]);
-  const [domMsg] = useState<string>(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('msg') || '';
-  });
+  const [domMsg] = useState<string>(() => getSearchParam('msg') || '');
 
   const loadForUser = async (uid: string) => {
-    const res = await fetch(`/api/notifications?userId=${encodeURIComponent(uid)}`);
-    if (res.ok) {
-      const data = await res.json();
-      setItems(data.notifications || []);
+    const parsed = Number(uid);
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      setItems([]);
+      return;
     }
+    const list = await fsGetNotifications(parsed);
+    setItems(list);
   };
 
   useEffect(() => {
@@ -27,16 +42,15 @@ export function NotificationsPage() {
   }, [targetUserId]);
 
   const markRead = async (id: number) => {
-    await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
-    loadForUser(targetUserId);
-    refreshNotifications(Number(targetUserId));
+    await fsMarkNotificationRead(id);
+    await loadForUser(targetUserId);
+    await refreshNotifications(Number(targetUserId));
   };
 
   const deleteNotification = async (id: number) => {
-    // Intentionally vulnerable GET CSRF deletion
-    await fetch(`/api/notifications/delete?id=${id}`);
-    loadForUser(targetUserId);
-    refreshNotifications(Number(targetUserId));
+    await fsDeleteNotification(id);
+    await loadForUser(targetUserId);
+    await refreshNotifications(Number(targetUserId));
   };
 
   const typeLabel = (t: string) => {

@@ -13,6 +13,23 @@ import {
 import { useApp, type User } from '../context/AppContext';
 import { SiteCustomizerPanel } from '../components/dashboard/SiteCustomizerPanel';
 import { SecurityLabPanel } from '../components/dashboard/SecurityLabPanel';
+import {
+  fsGetUsers,
+  fsGetAnnouncements,
+  fsGetStudyPlans,
+  fsGetResources,
+  fsGetTickets,
+  fsCreateAnnouncement,
+  fsDeleteAnnouncement,
+  fsSendNotification,
+  fsCreateStudyPlan,
+  fsCreateResource,
+  fsUpdateUser,
+  type AnnouncementRecord,
+  type StudyPlanRecord,
+  type ResourceRecord,
+  type TicketRecord,
+} from '../services/firestoreService';
 
 type DashTab =
   | 'overview'
@@ -23,46 +40,15 @@ type DashTab =
   | 'users'
   | 'lab';
 
-interface AnnouncementRow {
-  id: number;
-  title: string;
-  content: string;
-  priority: string;
-  author: string;
-}
-
-interface PlanRow {
-  id: number;
-  title: string;
-  category: string;
-  duration: string;
-}
-
-interface ResourceRow {
-  id: number;
-  title: string;
-  category: string;
-  type: string;
-}
-
-interface TicketRow {
-  id: number;
-  name: string;
-  email: string;
-  subject: string;
-  message: string;
-  status: string;
-}
-
 export function DashboardPage({ onNavigate }: { onNavigate: (path: string) => void }) {
   const { user, settings, refreshNotifications } = useApp();
   const [tab, setTab] = useState<DashTab>('overview');
 
   const [usersList, setUsersList] = useState<User[]>([]);
-  const [announcements, setAnnouncements] = useState<AnnouncementRow[]>([]);
-  const [plans, setPlans] = useState<PlanRow[]>([]);
-  const [resources, setResources] = useState<ResourceRow[]>([]);
-  const [tickets, setTickets] = useState<TicketRow[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementRecord[]>([]);
+  const [plans, setPlans] = useState<StudyPlanRecord[]>([]);
+  const [resources, setResources] = useState<ResourceRecord[]>([]);
+  const [tickets, setTickets] = useState<TicketRecord[]>([]);
 
   // Form states
   const [annTitle, setAnnTitle] = useState('');
@@ -92,18 +78,18 @@ export function DashboardPage({ onNavigate }: { onNavigate: (path: string) => vo
   };
 
   const loadAllData = async () => {
-    const [uRes, aRes, pRes, rRes, tRes] = await Promise.all([
-      fetch('/api/users'),
-      fetch('/api/announcements'),
-      fetch('/api/study-plans'),
-      fetch('/api/resources'),
-      fetch('/api/contact/tickets'),
+    const [uData, aData, pData, rData, tData] = await Promise.all([
+      fsGetUsers(),
+      fsGetAnnouncements(),
+      fsGetStudyPlans(),
+      fsGetResources(),
+      fsGetTickets(),
     ]);
-    if (uRes.ok) setUsersList(await uRes.json());
-    if (aRes.ok) setAnnouncements(await aRes.json());
-    if (pRes.ok) setPlans((await pRes.json()).plans || []);
-    if (rRes.ok) setResources((await rRes.json()).items || []);
-    if (tRes.ok) setTickets(await tRes.json());
+    setUsersList(uData);
+    setAnnouncements(aData);
+    setPlans(pData.plans);
+    setResources(rData.items);
+    setTickets(tData);
   };
 
   useEffect(() => {
@@ -112,97 +98,64 @@ export function DashboardPage({ onNavigate }: { onNavigate: (path: string) => vo
 
   const handleCreateAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch('/api/announcements', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: annTitle,
-        content: annContent,
-        priority: annPriority,
-        author: user?.name || 'إدارة المدرسة',
-      }),
+    await fsCreateAnnouncement({
+      title: annTitle,
+      content: annContent,
+      priority: annPriority,
+      author: user?.name || 'إدارة المدرسة',
     });
-    if (res.ok) {
-      setAnnTitle('');
-      setAnnContent('');
-      notify('تم نشر الإعلان بنجاح');
-      loadAllData();
-    }
+    setAnnTitle('');
+    setAnnContent('');
+    notify('تم نشر الإعلان بنجاح');
+    loadAllData();
   };
 
   const handleDeleteAnnouncement = async (id: number) => {
-    await fetch(`/api/announcements/${id}`, { method: 'DELETE' });
+    await fsDeleteAnnouncement(id);
     loadAllData();
   };
 
   const handleSendNotification = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch('/api/notifications', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        user_id: notifUserId,
-        title: notifTitle,
-        message: notifMsg,
-        type: notifType,
-      }),
-    });
-    if (res.ok) {
-      setNotifTitle('');
-      setNotifMsg('');
-      notify('تم إرسال الإشعار بنجاح');
-      refreshNotifications();
-    }
+    await fsSendNotification(notifUserId, notifTitle, notifMsg, notifType);
+    setNotifTitle('');
+    setNotifMsg('');
+    notify('تم إرسال الإشعار بنجاح');
+    refreshNotifications();
   };
 
   const handleCreatePlan = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch('/api/study-plans', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: planTitle,
-        category: planCat,
-        duration: planDur,
-        description: planDesc,
-      }),
+    await fsCreateStudyPlan({
+      title: planTitle,
+      category: planCat,
+      duration: planDur,
+      description: planDesc,
     });
-    if (res.ok) {
-      setPlanTitle('');
-      setPlanDesc('');
-      notify('تمت إضافة خطة المذاكرة');
-      loadAllData();
-    }
+    setPlanTitle('');
+    setPlanDesc('');
+    notify('تمت إضافة خطة المذاكرة');
+    loadAllData();
   };
 
   const handleCreateResource = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch('/api/resources', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: resTitle,
-        category: resCat,
-        type: resType,
-        description: resDesc,
-        author: user?.name || 'الإدارة',
-      }),
+    await fsCreateResource({
+      title: resTitle,
+      category: resCat,
+      type: resType,
+      description: resDesc,
+      author: user?.name || 'الإدارة',
     });
-    if (res.ok) {
-      setResTitle('');
-      setResDesc('');
-      notify('تمت إضافة المصدر التعليمي');
-      loadAllData();
-    }
+    setResTitle('');
+    setResDesc('');
+    notify('تمت إضافة المصدر التعليمي');
+    loadAllData();
   };
 
   const handleToggleRole = async (targetUser: User) => {
     const nextRole = targetUser.role === 'admin' ? 'student' : 'admin';
-    await fetch(`/api/users/${targetUser.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: nextRole }),
-    });
+    await fsUpdateUser(targetUser.id, { role: nextRole });
     notify(`تم تحديث صلاحية ${targetUser.username} إلى ${nextRole}`);
     loadAllData();
   };
@@ -280,7 +233,7 @@ export function DashboardPage({ onNavigate }: { onNavigate: (path: string) => vo
                   نظرة عامة على المنصة
                 </h1>
                 <p className="text-xs text-slate-500 mt-1">
-                  إدارة المحتوى التعليمي، تخصيص الواجهة، ومتابعة الطلاب
+                  إدارة المحتوى التعليمي، تخصيص الواجهة، ومتابعة الطلاب عبر قاعدة بيانات Firestore
                 </p>
               </div>
 

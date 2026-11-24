@@ -1,0 +1,163 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_.\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'username', 'password', 'name', 'role', 'points']) &&
+        data.id is number &&
+        data.username is string && data.username.size() > 0 && data.username.size() <= 100 &&
+        data.password is string && data.password.size() <= 200 &&
+        data.name is string && data.name.size() <= 200 &&
+        data.role is string && data.role.size() <= 50 &&
+        data.points is number;
+    }
+
+    function isValidStudyPlan(data) {
+      return data.keys().hasAll(['id', 'title', 'category', 'duration', 'level', 'description']) &&
+        data.id is number &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 300 &&
+        data.category is string && data.category.size() <= 100 &&
+        data.duration is string && data.duration.size() <= 100 &&
+        data.level is string && data.level.size() <= 100 &&
+        data.description is string && data.description.size() <= 2000;
+    }
+
+    function isValidResource(data) {
+      return data.keys().hasAll(['id', 'title', 'category', 'type', 'description']) &&
+        data.id is number &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 300 &&
+        data.category is string && data.category.size() <= 100 &&
+        data.type is string && data.type.size() <= 100 &&
+        data.description is string && data.description.size() <= 2000;
+    }
+
+    function isValidAnnouncement(data) {
+      return data.keys().hasAll(['id', 'title', 'content', 'priority', 'author']) &&
+        data.id is number &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 300 &&
+        data.content is string && data.content.size() <= 5000 &&
+        data.priority is string && data.priority.size() <= 50 &&
+        data.author is string && data.author.size() <= 200;
+    }
+
+    function isValidComment(data) {
+      return data.keys().hasAll(['id', 'announcement_id', 'author_name', 'body']) &&
+        data.id is number &&
+        data.announcement_id is number &&
+        data.author_name is string && data.author_name.size() <= 200 &&
+        data.body is string && data.body.size() > 0 && data.body.size() <= 3000;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['id', 'user_id', 'title', 'message', 'type', 'is_read']) &&
+        data.id is number &&
+        data.user_id is number &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 300 &&
+        data.message is string && data.message.size() <= 3000 &&
+        data.type is string && data.type.size() <= 50 &&
+        data.is_read is number;
+    }
+
+    function isValidTicket(data) {
+      return data.keys().hasAll(['id', 'name', 'subject', 'message', 'status']) &&
+        data.id is number &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+        data.subject is string && data.subject.size() > 0 && data.subject.size() <= 300 &&
+        data.message is string && data.message.size() > 0 && data.message.size() <= 4000 &&
+        data.status is string && data.status.size() <= 50;
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasAll(['siteName', 'heroTitle']) &&
+        data.siteName is string && data.siteName.size() > 0 && data.siteName.size() <= 200 &&
+        data.heroTitle is string && data.heroTitle.size() > 0 && data.heroTitle.size() <= 400;
+    }
+
+    function isValidUpload(data) {
+      return data.keys().hasAll(['filename', 'content']) &&
+        data.filename is string && data.filename.size() > 0 && data.filename.size() <= 255 &&
+        data.content is string && data.content.size() <= 50000;
+    }
+
+    function isValidSqlLog(data) {
+      return data.keys().hasAll(['ts', 'route', 'query']) &&
+        data.ts is string && data.ts.size() <= 100 &&
+        data.route is string && data.route.size() <= 200 &&
+        data.query is string && data.query.size() <= 2000;
+    }
+
+    // Intentionally vulnerable lab collections: schema-validated without strict auth barriers
+    // so IDOR, Mass Assignment, Broken Access Control, and admin/admin123 work on static hosting.
+    match /test/connection {
+      allow get: if true;
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow create, update: if isValidId(userId) && isValidUser(incoming());
+      allow delete: if isValidId(userId);
+    }
+
+    match /study_plans/{planId} {
+      allow read: if true;
+      allow create, update: if isValidId(planId) && isValidStudyPlan(incoming());
+      allow delete: if isValidId(planId);
+    }
+
+    match /resources/{resourceId} {
+      allow read: if true;
+      allow create, update: if isValidId(resourceId) && isValidResource(incoming());
+      allow delete: if isValidId(resourceId);
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow create, update: if isValidId(announcementId) && isValidAnnouncement(incoming());
+      allow delete: if isValidId(announcementId);
+    }
+
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create, update: if isValidId(commentId) && isValidComment(incoming());
+      allow delete: if isValidId(commentId);
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if true;
+      allow create, update: if isValidId(notificationId) && isValidNotification(incoming());
+      allow delete: if isValidId(notificationId);
+    }
+
+    match /tickets/{ticketId} {
+      allow read: if true;
+      allow create, update: if isValidId(ticketId) && isValidTicket(incoming());
+      allow delete: if isValidId(ticketId);
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow create, update: if isValidId(settingId) && isValidSettings(incoming());
+    }
+
+    match /uploads/{uploadId} {
+      allow read: if true;
+      allow create, update: if isValidId(uploadId) && isValidUpload(incoming());
+    }
+
+    match /sql_logs/{logId} {
+      allow read: if true;
+      allow create: if isValidId(logId) && isValidSqlLog(incoming());
+    }
+  }
+}

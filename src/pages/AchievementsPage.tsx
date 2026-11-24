@@ -1,30 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { Award, Trophy, Sparkles } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp, type User } from '../context/AppContext';
 import { getStudentRank } from '../utils/studyLogic';
-
-interface LeaderItem {
-  id: number;
-  username: string;
-  name: string;
-  role: string;
-  points: number;
-}
+import {
+  fsGetUsers,
+  fsClaimPoints,
+  fsGenerateCertificate,
+} from '../services/firestoreService';
 
 export function AchievementsPage() {
-  const { user, settings } = useApp();
-  const [leaders, setLeaders] = useState<LeaderItem[]>([]);
+  const { user, settings, refreshCurrentUser } = useApp();
+  const [leaders, setLeaders] = useState<User[]>([]);
   const [certName, setCertName] = useState(user?.name || 'سارة القحطاني');
   const [certTitle, setCertTitle] = useState('إتمام خطة القدرات الكمي');
   const [certOutput, setCertOutput] = useState('');
   const [claimMsg, setClaimMsg] = useState('');
 
   const loadLeaders = async () => {
-    const res = await fetch('/api/achievements');
-    if (res.ok) {
-      const data = await res.json();
-      setLeaders(data.leaders || []);
-    }
+    const users = await fsGetUsers();
+    setLeaders(users);
   };
 
   useEffect(() => {
@@ -32,29 +26,16 @@ export function AchievementsPage() {
   }, []);
 
   const handleClaimPoints = async () => {
-    const res = await fetch('/api/achievements/claim', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user?.id || 2, points: 250 }),
-    });
-    if (res.ok) {
-      setClaimMsg('تمت إضافة 250 نقطة مكافأة إلى رصيدك بنجاح!');
-      loadLeaders();
-      setTimeout(() => setClaimMsg(''), 3500);
-    }
+    await fsClaimPoints(user?.id || 2, 250);
+    setClaimMsg('تمت إضافة 250 نقطة مكافأة إلى رصيدك بنجاح!');
+    await Promise.all([loadLeaders(), refreshCurrentUser()]);
+    setTimeout(() => setClaimMsg(''), 3500);
   };
 
-  const handleGenerateCert = async (e: React.FormEvent) => {
+  const handleGenerateCert = (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch('/api/achievements/certificate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ studentName: certName, achievementTitle: certTitle }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setCertOutput(data.rendered);
-    }
+    const rendered = fsGenerateCertificate(certName, certTitle);
+    setCertOutput(rendered);
   };
 
   return (

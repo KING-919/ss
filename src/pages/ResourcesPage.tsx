@@ -1,21 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { Search, Download, Upload, Globe, FileText, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-
-interface ResourceItem {
-  id: number;
-  title: string;
-  category: string;
-  type: string;
-  description: string;
-  file_name: string;
-  author: string;
-  downloads: number;
-}
+import {
+  fsGetResources,
+  fsUploadFile,
+  fsGetUploadedFile,
+  type ResourceRecord,
+} from '../services/firestoreService';
+import { resolveVirtualFile, resolveSandboxedSsrf } from '../utils/labSandbox';
 
 export function ResourcesPage() {
   const { settings } = useApp();
-  const [items, setItems] = useState<ResourceItem[]>([]);
+  const [items, setItems] = useState<ResourceRecord[]>([]);
   const [query, setQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [category, setCategory] = useState('الكل');
@@ -34,25 +30,22 @@ export function ResourcesPage() {
   const [uploadContent, setUploadContent] = useState(
     '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(\'SVG XSS\')"><text y="20">ملف تعليمي</text></svg>',
   );
-  const [uploadResult, setUploadResult] = useState('');
+  const [uploadResult, setUploadResult] = useState<{ name: string; blobUrl: string } | null>(null);
 
   const categories = ['الكل', 'القدرات الكمي', 'القدرات اللفظي', 'التحصيلي'];
 
   const loadResources = async (searchQ: string, cat: string) => {
     setSqlError('');
     try {
-      const res = await fetch(
-        `/api/resources?q=${encodeURIComponent(searchQ)}&category=${encodeURIComponent(cat)}`,
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        setSqlError(`${data.sqlError || data.error} | Query: ${data.debugQuery || ''}`);
+      const data = await fsGetResources(searchQ, cat);
+      if (data.sqlError) {
+        setSqlError(`${data.sqlError} | Query: ${data.debugQuery}`);
         setItems([]);
       } else {
-        setItems(data.items || []);
+        setItems(data.items);
       }
     } catch {
-      setSqlError('تعذر الاتصال بالخادم');
+      setSqlError('تعذر الاتصال بقاعدة البيانات');
     }
   };
 
@@ -67,35 +60,43 @@ export function ResourcesPage() {
   };
 
   const openFilePreview = async (fileName: string) => {
-    const res = await fetch(`/api/resources/download?file=${encodeURIComponent(fileName)}`);
-    const data = await res.json();
-    if (res.ok) {
-      setPreviewFile({ file: fileName, resolvedPath: data.resolvedPath, content: data.content });
-    } else {
-      setPreviewFile({ file: fileName, resolvedPath: data.resolvedPath, error: data.error });
+    const res = resolveVirtualFile(fileName);
+    if (res.found) {
+      setPreviewFile({ file: fileName, resolvedPath: res.resolvedPath, content: res.content });
+      return;
     }
+    const uploaded = await fsGetUploadedFile(fileName);
+    if (uploaded !== null) {
+      setPreviewFile({
+        file: fileName,
+        resolvedPath: `/firestore/uploads/${fileName}`,
+        content: uploaded,
+      });
+      return;
+    }
+    setPreviewFile({
+      file: fileName,
+      resolvedPath: res.resolvedPath,
+      error: `الملف غير موجود: ${res.resolvedPath}`,
+    });
   };
 
   const handleImportUrl = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch('/api/resources/import-url', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: importUrl }),
-    });
-    const data = await res.json();
+    const data = resolveSandboxedSsrf(importUrl);
     setImportResult(`${data.title}\n\n${data.body}`);
   };
 
   const handleUploadFile = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch('/api/resources/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: uploadName, content: uploadContent }),
-    });
-    const data = await res.json();
-    setUploadResult(data.url ? `تم الرفع بنجاح: ${data.url}` : data.error);
+    const savedName = await fsUploadFile(uploadName, uploadContent);
+    const mime = savedName.endsWith('.svg')
+      ? 'image/svg+xml'
+      : savedName.endsWith('.html')
+        ? 'text/html'
+        : 'text/plain';
+    const blobUrl = URL.createObjectURL(new Blob([uploadContent], { type: mime }));
+    setUploadResult({ name: savedName, blobUrl });
   };
 
   return (
@@ -372,22 +373,32 @@ export function ResourcesPage() {
                 className="px-4 py-2 text-sm font-semibold text-white rounded-lg"
                 style={{ backgroundColor: settings.primaryColor }}
               >
-                رفع الملف
+                رفع الملف إلى قاعدة البيانات
               </button>
             </form>
             {uploadResult && (
-              <div className="mt-4 p-3 rounded-lg bg-slate-100 text-xs font-mono" dir="ltr">
-                {uploadResult}{' '}
-                {uploadResult.includes('/uploads/') && (
+              <div className="mt-4 p-3 rounded-lg bg-slate-100 text-xs font-mono flex items-center justify-between gap-2" dir="ltr">
+                <span>Uploaded to Firestore: /uploads/{uploadResult.name}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUploadModal(false);
+                      openFilePreview(uploadResult.name);
+                    }}
+                    className="underline text-slate-700"
+                  >
+                    معاينة
+                  </button>
                   <a
-                    href={uploadResult.replace('تم الرفع بنجاح: ', '')}
+                    href={uploadResult.blobUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="underline text-indigo-600 ml-2"
+                    className="underline text-indigo-600"
                   >
                     فتح الملف
                   </a>
-                )}
+                </div>
               </div>
             )}
           </div>

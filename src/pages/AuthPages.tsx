@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { Lock, UserPlus, KeyRound } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import {
+  fsLogin,
+  fsLoginWithGoogle,
+  fsRegister,
+  fsResetPassword,
+} from '../services/firestoreService';
 
 interface AuthPageProps {
   onNavigate: (path: string) => void;
@@ -16,45 +22,62 @@ export function LoginPage({ onNavigate }: AuthPageProps) {
   const [resetUser, setResetUser] = useState('');
   const [resetPass, setResetPass] = useState('');
   const [resetMsg, setResetMsg] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setDebugSql('');
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ username, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.sqlError ? `${data.error}: ${data.sqlError}` : data.error);
-      if (data.debugQuery) setDebugSql(data.debugQuery);
-      return;
-    }
-    setUserSession(data.user, data.token);
-    await refreshNotifications(data.user.id);
-
+  const handlePostLogin = async (userId: number) => {
+    await refreshNotifications(userId);
     const params = new URLSearchParams(window.location.search);
-    const nextUrl = params.get('next');
+    const hashParams = window.location.hash.includes('?')
+      ? new URLSearchParams(window.location.hash.split('?')[1])
+      : null;
+    const nextUrl = params.get('next') || hashParams?.get('next');
     if (nextUrl) {
       // Intentionally vulnerable Open Redirect via ?next=
-      window.location.href = `/api/redirect?next=${encodeURIComponent(nextUrl)}`;
+      window.location.href = nextUrl;
       return;
     }
     onNavigate('/dashboard');
   };
 
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setDebugSql('');
+    setSubmitting(true);
+    try {
+      const data = await fsLogin(username, password);
+      if (data.error || !data.user) {
+        setError(data.sqlError ? `${data.error}: ${data.sqlError}` : data.error || 'خطأ في الدخول');
+        if (data.debugQuery) setDebugSql(data.debugQuery);
+        return;
+      }
+      setUserSession(data.user, data.token || null);
+      await handlePostLogin(data.user.id);
+    } catch {
+      setError('تعذر الاتصال بقاعدة البيانات');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    setSubmitting(true);
+    try {
+      const data = await fsLoginWithGoogle();
+      setUserSession(data.user, data.token);
+      await handlePostLogin(data.user.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'تعذر تسجيل الدخول عبر Google');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch('/api/auth/reset-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: resetUser, newPassword: resetPass }),
-    });
-    const data = await res.json();
-    setResetMsg(data.message || data.error);
+    const message = await fsResetPassword(resetUser, resetPass);
+    setResetMsg(message);
   };
 
   return (
@@ -116,10 +139,20 @@ export function LoginPage({ onNavigate }: AuthPageProps) {
 
           <button
             type="submit"
+            disabled={submitting}
             className="w-full py-2.5 text-sm font-semibold text-white rounded-lg"
             style={{ backgroundColor: settings.secondaryColor }}
           >
-            دخول
+            {submitting ? 'جاري التحقق...' : 'دخول'}
+          </button>
+
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={handleGoogleLogin}
+            className="w-full py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            تسجيل الدخول عبر Google
           </button>
         </form>
 
@@ -186,23 +219,18 @@ export function RegisterPage({ onNavigate }: AuthPageProps) {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('student');
+  const [role] = useState('student');
   const [error, setError] = useState('');
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const res = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, username, email, password, role }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error || 'تعذر إنشاء الحساب');
+    const res = await fsRegister({ name, username, email, password, role });
+    if (res.error || !res.user) {
+      setError(res.error || 'تعذر إنشاء الحساب');
       return;
     }
-    setUserSession(data.user, data.token);
+    setUserSession(res.user, res.token || null);
     onNavigate('/dashboard');
   };
 
@@ -267,7 +295,6 @@ export function RegisterPage({ onNavigate }: AuthPageProps) {
               className="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg bg-white"
             />
           </div>
-          {/* Hidden Mass Assignment role field exposed as select/advanced option */}
           <input type="hidden" name="role" value={role} />
           {error && <p className="text-xs text-red-600">{error}</p>}
           <button

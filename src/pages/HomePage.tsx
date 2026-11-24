@@ -1,29 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Calendar, FileText, Trophy, Megaphone } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { fsGetAnnouncements, type AnnouncementRecord } from '../services/firestoreService';
 
 interface HomePageProps {
   onNavigate: (path: string) => void;
 }
 
-interface AnnouncementPreview {
-  id: number;
-  title: string;
-  content: string;
-  author: string;
-  created_at: string;
-}
-
 export function HomePage({ onNavigate }: HomePageProps) {
   const { settings } = useApp();
-  const [announcements, setAnnouncements] = useState<AnnouncementPreview[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementRecord[]>([]);
 
   useEffect(() => {
-    fetch('/api/announcements')
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data) => {
-        if (Array.isArray(data)) setAnnouncements(data.slice(0, 3));
-      })
+    fsGetAnnouncements()
+      .then((data) => setAnnouncements(data.slice(0, 3)))
       .catch(() => {});
   }, []);
 

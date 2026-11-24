@@ -1,36 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { Megaphone, MessageSquare, Send } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-
-interface CommentItem {
-  id: number;
-  announcement_id: number;
-  author_name: string;
-  body: string;
-  created_at: string;
-}
-
-interface AnnouncementItem {
-  id: number;
-  title: string;
-  content: string;
-  priority: string;
-  author: string;
-  created_at: string;
-  comments: CommentItem[];
-}
+import {
+  fsGetAnnouncements,
+  fsAddComment,
+  type AnnouncementRecord,
+} from '../services/firestoreService';
 
 export function AnnouncementsPage() {
   const { settings, user } = useApp();
-  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementRecord[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [authorInputs, setAuthorInputs] = useState<Record<number, string>>({});
 
   const loadAnnouncements = async () => {
-    const res = await fetch('/api/announcements');
-    if (res.ok) {
-      setAnnouncements(await res.json());
-    }
+    const data = await fsGetAnnouncements();
+    setAnnouncements(data);
   };
 
   useEffect(() => {
@@ -42,15 +27,9 @@ export function AnnouncementsPage() {
     const body = commentInputs[announcementId] || '';
     if (!body.trim()) return;
     const author_name = authorInputs[announcementId] || user?.name || 'طالب ثانوية العارضة';
-    const res = await fetch(`/api/announcements/${announcementId}/comments`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ author_name, body }),
-    });
-    if (res.ok) {
-      setCommentInputs((prev) => ({ ...prev, [announcementId]: '' }));
-      loadAnnouncements();
-    }
+    await fsAddComment(announcementId, author_name, body);
+    setCommentInputs((prev) => ({ ...prev, [announcementId]: '' }));
+    await loadAnnouncements();
   };
 
   const priorityLabel = (p: string) => {

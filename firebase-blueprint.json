@@ -1,0 +1,192 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Platform user account (admin, teacher, or student) for Al-Ardah Educational Platform.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number", "description": "Numeric user identifier for IDOR lab compatibility" },
+        "username": { "type": "string", "maxLength": 100 },
+        "password": { "type": "string", "maxLength": 200 },
+        "password_md5": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 200 },
+        "email": { "type": "string", "maxLength": 200 },
+        "role": { "type": "string", "maxLength": 50 },
+        "points": { "type": "number" },
+        "phone": { "type": "string", "maxLength": 50 },
+        "secret_note": { "type": "string", "maxLength": 500 },
+        "created_at": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["id", "username", "password", "name", "role", "points"]
+    },
+    "StudyPlan": {
+      "title": "StudyPlan",
+      "description": "Interactive Qudrat and Tahsili study plan.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "title": { "type": "string", "maxLength": 300 },
+        "category": { "type": "string", "maxLength": 100 },
+        "duration": { "type": "string", "maxLength": 100 },
+        "level": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "tasks": { "type": "array" },
+        "enrolled_count": { "type": "number" },
+        "created_at": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["id", "title", "category", "duration", "level", "description"]
+    },
+    "Resource": {
+      "title": "Resource",
+      "description": "Learning resource item (notes, summaries, question banks).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "title": { "type": "string", "maxLength": 300 },
+        "category": { "type": "string", "maxLength": 100 },
+        "type": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "file_name": { "type": "string", "maxLength": 300 },
+        "author": { "type": "string", "maxLength": 200 },
+        "downloads": { "type": "number" },
+        "created_at": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["id", "title", "category", "type", "description"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "School announcement with comments subcollection.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "title": { "type": "string", "maxLength": 300 },
+        "content": { "type": "string", "maxLength": 5000 },
+        "priority": { "type": "string", "maxLength": 50 },
+        "author": { "type": "string", "maxLength": 200 },
+        "created_at": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["id", "title", "content", "priority", "author"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "Comment on a school announcement.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "announcement_id": { "type": "number" },
+        "author_name": { "type": "string", "maxLength": 200 },
+        "body": { "type": "string", "maxLength": 3000 },
+        "created_at": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["id", "announcement_id", "author_name", "body"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notification item.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "user_id": { "type": "number" },
+        "title": { "type": "string", "maxLength": 300 },
+        "message": { "type": "string", "maxLength": 3000 },
+        "type": { "type": "string", "maxLength": 50 },
+        "is_read": { "type": "number" },
+        "created_at": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["id", "user_id", "title", "message", "type", "is_read"]
+    },
+    "Ticket": {
+      "title": "Ticket",
+      "description": "Contact support ticket.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "name": { "type": "string", "maxLength": 200 },
+        "email": { "type": "string", "maxLength": 200 },
+        "subject": { "type": "string", "maxLength": 300 },
+        "message": { "type": "string", "maxLength": 4000 },
+        "status": { "type": "string", "maxLength": 50 },
+        "internal_note": { "type": "string", "maxLength": 1000 },
+        "created_at": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["id", "name", "subject", "message", "status"]
+    },
+    "SiteSettings": {
+      "title": "SiteSettings",
+      "description": "Site-wide theme, typography, titles, and layout configuration.",
+      "type": "object",
+      "properties": {
+        "siteName": { "type": "string", "maxLength": 200 },
+        "heroTitle": { "type": "string", "maxLength": 400 },
+        "heroSubtitle": { "type": "string", "maxLength": 1000 },
+        "primaryColor": { "type": "string", "maxLength": 40 },
+        "fontFamily": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["siteName", "heroTitle"]
+    },
+    "UploadedFile": {
+      "title": "UploadedFile",
+      "description": "Uploaded educational resource file content.",
+      "type": "object",
+      "properties": {
+        "filename": { "type": "string", "maxLength": 255 },
+        "content": { "type": "string", "maxLength": 50000 },
+        "created_at": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["filename", "content"]
+    },
+    "SqlLog": {
+      "title": "SqlLog",
+      "description": "Audit log of simulated queries for the security lab.",
+      "type": "object",
+      "properties": {
+        "ts": { "type": "string", "maxLength": 100 },
+        "route": { "type": "string", "maxLength": 200 },
+        "query": { "type": "string", "maxLength": 2000 }
+      },
+      "required": ["ts", "route", "query"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User accounts for Al-Ardah platform."
+    },
+    "/study_plans/{planId}": {
+      "schema": { "$ref": "#/entities/StudyPlan" },
+      "description": "Study plans catalog."
+    },
+    "/resources/{resourceId}": {
+      "schema": { "$ref": "#/entities/Resource" },
+      "description": "Learning resources catalog."
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "School announcements."
+    },
+    "/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/Comment" },
+      "description": "Comments on announcements."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "User and admin notifications."
+    },
+    "/tickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/Ticket" },
+      "description": "Support and contact tickets."
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/SiteSettings" },
+      "description": "Platform theme and CMS configuration."
+    },
+    "/uploads/{uploadId}": {
+      "schema": { "$ref": "#/entities/UploadedFile" },
+      "description": "Uploaded files."
+    },
+    "/sql_logs/{logId}": {
+      "schema": { "$ref": "#/entities/SqlLog" },
+      "description": "Security lab query logs."
+    }
+  }
+}

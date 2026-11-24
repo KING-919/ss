@@ -1,16 +1,11 @@
 import React, { useState } from 'react';
 import { Send, Search } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-
-interface TicketItem {
-  id: number;
-  name: string;
-  email: string;
-  subject: string;
-  message: string;
-  status: string;
-  internal_note?: string;
-}
+import {
+  fsCreateTicket,
+  fsGetTicketById,
+  type TicketRecord,
+} from '../services/firestoreService';
 
 export function ContactPage() {
   const { settings } = useApp();
@@ -18,35 +13,33 @@ export function ContactPage() {
   const [email, setEmail] = useState('');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
-  const [submittedTicket, setSubmittedTicket] = useState<TicketItem | null>(null);
+  const [submittedTicket, setSubmittedTicket] = useState<TicketRecord | null>(null);
   const [lookupId, setLookupId] = useState('2');
-  const [foundTicket, setFoundTicket] = useState<TicketItem | null>(null);
+  const [foundTicket, setFoundTicket] = useState<TicketRecord | null>(null);
   const [lookupError, setLookupError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch('/api/contact', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, subject, message }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setSubmittedTicket(data.ticket);
-      setName('');
-      setEmail('');
-      setSubject('');
-      setMessage('');
-    }
+    const ticket = await fsCreateTicket({ name, email, subject, message });
+    setSubmittedTicket(ticket);
+    setName('');
+    setEmail('');
+    setSubject('');
+    setMessage('');
   };
 
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLookupError('');
     setFoundTicket(null);
-    const res = await fetch(`/api/contact/tickets/${encodeURIComponent(lookupId)}`);
-    if (res.ok) {
-      setFoundTicket(await res.json());
+    const id = Number(lookupId);
+    if (!Number.isFinite(id) || id < 1) {
+      setLookupError('رقم التذكرة غير صالح');
+      return;
+    }
+    const ticket = await fsGetTicketById(id);
+    if (ticket) {
+      setFoundTicket(ticket);
     } else {
       setLookupError('لم يتم العثور على التذكرة');
     }

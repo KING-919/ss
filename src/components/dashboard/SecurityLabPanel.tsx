@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { ShieldAlert, Terminal, Copy, Check, Bug } from 'lucide-react';
 import { VULNERABILITIES_CATALOG } from '../../utils/studyLogic';
+import { executeSandboxedPing } from '../../utils/labSandbox';
+import { fsGetDebugLogs } from '../../services/firestoreService';
 
 export function SecurityLabPanel() {
   const [pingHost, setPingHost] = useState('127.0.0.1; env');
@@ -8,20 +10,14 @@ export function SecurityLabPanel() {
   const [debugLogs, setDebugLogs] = useState<string>('');
   const [copiedId, setCopiedId] = useState<string>('');
 
-  const runPing = async (e: React.FormEvent) => {
+  const runPing = (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch('/api/admin/tools/ping', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ host: pingHost }),
-    });
-    const data = await res.json();
+    const data = executeSandboxedPing(pingHost);
     setPingOutput(`$ ${data.command}\n\n${data.output}`);
   };
 
   const fetchDebugLogs = async () => {
-    const res = await fetch('/api/debug/logs');
-    const data = await res.json();
+    const data = await fsGetDebugLogs();
     setDebugLogs(JSON.stringify(data, null, 2));
   };
 
@@ -81,10 +77,10 @@ export function SecurityLabPanel() {
         {/* Unauthenticated Debug Endpoint */}
         <div className="p-5 bg-white border border-slate-200 rounded-xl space-y-4">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center gap-2">
               <Bug className="w-4 h-4 text-amber-600 shrink-0" />
-              <h3 className="text-sm font-bold text-slate-900 truncate">
-                سجلات النظام المكشوفة (<span dir="ltr" className="font-mono text-xs">/api/debug/logs</span>)
+              <h3 className="text-sm font-bold text-slate-900">
+                سجلات النظام المكشوفة (<span dir="ltr" className="font-mono text-xs">sql_logs</span>)
               </h3>
             </div>
             <button

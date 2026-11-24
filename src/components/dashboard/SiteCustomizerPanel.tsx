@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Palette, RotateCcw, Save, Check } from 'lucide-react';
 import { useApp, INITIAL_SETTINGS, type SiteSettings } from '../../context/AppContext';
+import { fsSaveSettings, fsResetSettings } from '../../services/firestoreService';
 
 const THEME_PRESETS: Array<{ name: string; patch: Partial<SiteSettings> }> = [
   {
@@ -70,28 +71,20 @@ export function SiteCustomizerPanel() {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch('/api/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      });
-      if (res.ok) {
-        setSavedNotice('تم حفظ مظهر ومحتوى الموقع وتطبيقه على جميع الصفحات');
-        setTimeout(() => setSavedNotice(''), 4000);
-      }
+      await fsSaveSettings(settings);
+      setSavedNotice('تم حفظ مظهر ومحتوى الموقع في قاعدة بيانات Firestore وتطبيقه على جميع الصفحات');
+      setTimeout(() => setSavedNotice(''), 4000);
     } finally {
       setSaving(false);
     }
   };
 
   const handleReset = async () => {
-    const res = await fetch('/api/settings/reset', { method: 'POST' });
-    if (res.ok) {
-      updateSettingsLocally(INITIAL_SETTINGS);
-      await refreshSettings();
-      setSavedNotice('تمت استعادة الإعدادات الافتراضية للموقع');
-      setTimeout(() => setSavedNotice(''), 4000);
-    }
+    await fsResetSettings();
+    updateSettingsLocally(INITIAL_SETTINGS);
+    await refreshSettings();
+    setSavedNotice('تمت استعادة الإعدادات الافتراضية للموقع');
+    setTimeout(() => setSavedNotice(''), 4000);
   };
 
   return (

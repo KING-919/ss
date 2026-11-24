@@ -1,4 +1,11 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import {
+  fsGetSettings,
+  fsGetNotifications,
+  fsGetUserById,
+  fsLogout,
+  readSessionFromCookies,
+} from '../services/firestoreService';
 
 export interface User {
   id: number;
@@ -9,6 +16,7 @@ export interface User {
   points: number;
   phone?: string;
   secret_note?: string;
+  created_at?: string;
 }
 
 export interface SiteSettings {
@@ -104,6 +112,7 @@ interface AppContextValue {
   unreadCount: number;
   loadingAuth: boolean;
   setUserSession: (user: User | null, token?: string | null) => void;
+  refreshCurrentUser: () => Promise<void>;
   logout: () => Promise<void>;
   refreshSettings: () => Promise<void>;
   updateSettingsLocally: (next: Partial<SiteSettings>) => void;
@@ -113,20 +122,26 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      const saved = localStorage.getItem('alardah_user');
-      return saved ? (JSON.parse(saved) as User) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('alardah_token'));
+  const initialSession = readSessionFromCookies();
+  const [user, setUser] = useState<User | null>(() =>
+    initialSession.user && initialSession.user.id
+      ? {
+          id: Number(initialSession.user.id),
+          username: String(initialSession.user.username || ''),
+          name: String(initialSession.user.name || initialSession.user.username || ''),
+          email: '',
+          role: String(initialSession.user.role || 'student'),
+          points: 0,
+        }
+      : null,
+  );
+  const [token, setToken] = useState<string | null>(() => initialSession.token);
   const [settings, setSettings] = useState<SiteSettings>(INITIAL_SETTINGS);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
   const applyThemeToDom = useCallback((s: SiteSettings) => {
+    if (typeof document === 'undefined') return;
     const root = document.documentElement;
     root.style.setProperty('--site-primary', s.primaryColor);
     root.style.setProperty('--site-secondary', s.secondaryColor);
@@ -151,13 +166,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const refreshSettings = useCallback(async () => {
     try {
-      const res = await fetch('/api/settings');
-      if (res.ok) {
-        const data = (await res.json()) as SiteSettings;
-        const merged = { ...INITIAL_SETTINGS, ...data };
-        setSettings(merged);
-        applyThemeToDom(merged);
-      }
+      const data = await fsGetSettings();
+      const merged = { ...INITIAL_SETTINGS, ...data };
+      setSettings(merged);
+      applyThemeToDom(merged);
     } catch {
       applyThemeToDom(INITIAL_SETTINGS);
     }
@@ -178,45 +190,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     async (overrideUserId?: number) => {
       try {
         const uid = overrideUserId ?? user?.id ?? 2;
-        const res = await fetch(`/api/notifications?userId=${uid}`);
-        if (res.ok) {
-          const data = (await res.json()) as { notifications: NotificationItem[] };
-          setNotifications(data.notifications || []);
-        }
+        const list = await fsGetNotifications(uid);
+        setNotifications(list);
       } catch {
-        // ignore
+        // non-fatal
       }
     },
     [user?.id],
   );
+
+  const refreshCurrentUser = useCallback(async () => {
+    const { user: cookieUser, token: cookieToken } = readSessionFromCookies();
+    if (!cookieUser?.id) {
+      setLoadingAuth(false);
+      return;
+    }
+    try {
+      const dbUser = await fsGetUserById(Number(cookieUser.id));
+      if (dbUser) {
+        // Respect role claim from JWT (intentional JWT alg:none lab behavior)
+        setUser({ ...dbUser, role: cookieUser.role || dbUser.role });
+      }
+      if (cookieToken) setToken(cookieToken);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingAuth(false);
+    }
+  }, []);
 
   useEffect(() => {
     refreshSettings();
   }, [refreshSettings]);
 
   useEffect(() => {
-    const hasCookie = typeof document !== 'undefined' && document.cookie.includes('session_user=');
-    if (!token && !hasCookie) {
-      setLoadingAuth(false);
-      return;
-    }
-    (async () => {
-      try {
-        const headers: Record<string, string> = {};
-        if (token) headers.Authorization = `Bearer ${token}`;
-        const res = await fetch('/api/auth/me', { headers, credentials: 'include' });
-        if (res.ok) {
-          const data = (await res.json()) as { user: User };
-          setUser(data.user);
-          localStorage.setItem('alardah_user', JSON.stringify(data.user));
-        }
-      } catch {
-        // ignore
-      } finally {
-        setLoadingAuth(false);
-      }
-    })();
-  }, [token]);
+    refreshCurrentUser();
+  }, [refreshCurrentUser]);
 
   useEffect(() => {
     refreshNotifications();
@@ -224,20 +233,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setUserSession = (nextUser: User | null, nextToken?: string | null) => {
     setUser(nextUser);
-    if (nextUser) {
-      localStorage.setItem('alardah_user', JSON.stringify(nextUser));
-    } else {
-      localStorage.removeItem('alardah_user');
-    }
     if (nextToken !== undefined) {
       setToken(nextToken);
-      if (nextToken) localStorage.setItem('alardah_token', nextToken);
-      else localStorage.removeItem('alardah_token');
     }
   };
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fsLogout();
     setUserSession(null, null);
   };
 
@@ -253,6 +255,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         unreadCount,
         loadingAuth,
         setUserSession,
+        refreshCurrentUser,
         logout,
         refreshSettings,
         updateSettingsLocally,
