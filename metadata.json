@@ -1,0 +1,8 @@
+{
+  "name": "منصة ثانوية العارضة",
+  "description": "منصة تعليمية متطورة لتطوير قدرات الطلاب والتحضير لاختبارات القدرات والتحصيلي مع مختبر أمني تعليمي متكامل.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
